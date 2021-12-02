@@ -4,13 +4,14 @@ import { hasFiles } from './files'
 import { objectToFormData } from './formData'
 import { default as Axios, AxiosResponse } from 'axios'
 import { hrefToUrl, mergeDataIntoQueryString, urlWithoutHash } from './url'
-import { ActiveVisit, GlobalEvent, GlobalEventNames, GlobalEventResult, LocationVisit, Method, Page, PageHandler, PageResolver, PendingVisit, PreserveStateOption, RequestPayload, VisitId, VisitOptions } from './types'
+import { ActiveVisit, GlobalEvent, GlobalEventNames, GlobalEventResult, LocationVisit, Method, Page, PageHandler, PageResolver, PendingVisit, PreserveStateOption, RequestPayload, VisitId, VisitParams, VisitOptions } from './types'
 import { fireBeforeEvent, fireErrorEvent, fireExceptionEvent, fireFinishEvent, fireInvalidEvent, fireNavigateEvent, fireProgressEvent, fireStartEvent, fireSuccessEvent } from './events'
 
 export class Router {
   protected resolveComponent!: PageResolver
   protected swapComponent!: PageHandler
   protected activeVisit?: ActiveVisit
+  protected visitOptions!: VisitOptions
   protected visitId: VisitId = null
   protected page!: Page
 
@@ -18,14 +19,17 @@ export class Router {
     initialPage,
     resolveComponent,
     swapComponent,
+    visitOptions,
   }: {
     initialPage: Page,
     resolveComponent: PageResolver,
     swapComponent: PageHandler,
+    visitOptions: VisitOptions,
   }): void {
     this.page = initialPage
     this.resolveComponent = resolveComponent
     this.swapComponent = swapComponent
+    this.visitOptions = visitOptions
 
     if (this.isBackForwardVisit()) {
       this.handleBackForwardVisit(this.page)
@@ -192,37 +196,72 @@ export class Router {
       return value
     }
   }
+  
+  protected prepareVisit(href: string|URL, options: Required<VisitParams>): Required<VisitParams> & { url: URL } {
+    const url = typeof href === 'string' ? hrefToUrl(href) : href
+    const prepared = this.visitOptions({ url, options }) || options
+
+    if ((hasFiles(prepared.data) || prepared.forceFormData) && !(prepared.data instanceof FormData)) {
+      prepared.data = objectToFormData(prepared.data)
+    }
+
+    if (!(prepared.data instanceof FormData)) {
+      const [_href, _data] = mergeDataIntoQueryString(prepared.method, url, prepared.data)
+
+      return {
+        ... prepared,
+        data: _data,
+        url: hrefToUrl(_href),
+      }
+    }
+
+    return {
+      ... prepared,
+      url,
+    }
+  }
 
   public visit(href: string|URL, {
-    method = Method.GET,
-    data = {},
-    replace = false,
-    preserveScroll = false,
-    preserveState = false,
-    only = [],
-    headers = {},
-    errorBag = '',
-    forceFormData = false,
-    onCancelToken = () => {},
-    onBefore = () => {},
-    onStart = () => {},
-    onProgress = () => {},
-    onFinish = () => {},
-    onCancel = () => {},
-    onSuccess = () => {},
-    onError = () => {},
-  }: VisitOptions = {}): void {
-    let url = typeof href === 'string' ? hrefToUrl(href) : href
-
-    if ((hasFiles(data) || forceFormData) && !(data instanceof FormData)) {
-      data = objectToFormData(data)
-    }
-
-    if (!(data instanceof FormData)) {
-      const [_href, _data] = mergeDataIntoQueryString(method, url, data)
-      url = hrefToUrl(_href)
-      data = _data
-    }
+    method: _method = Method.GET,
+    data: _data = {},
+    replace: _replace = false,
+    preserveScroll: _preserveScroll = false,
+    preserveState: _preserveState = false,
+    only: _only = [],
+    headers: _headers = {},
+    errorBag: _errorBag = '',
+    forceFormData: _forceFormData = false,
+    onCancelToken: _onCancelToken = () => {},
+    onBefore: _onBefore = () => {},
+    onStart: _onStart = () => {},
+    onProgress: _onProgress = () => {},
+    onFinish: _onFinish = () => {},
+    onCancel: _onCancel = () => {},
+    onSuccess: _onSuccess = () => {},
+    onError: _onError = () => {},
+  }: VisitParams = {}): void {
+    const preparedOptions = this.prepareVisit(href, {
+      method: _method,
+      data: _data,
+      replace: _replace,
+      preserveScroll: _preserveScroll,
+      preserveState: _preserveState,
+      only: _only,
+      headers: _headers,
+      errorBag: _errorBag,
+      forceFormData: _forceFormData,
+      onCancelToken: _onCancelToken,
+      onBefore: _onBefore,
+      onStart: _onStart,
+      onProgress: _onProgress,
+      onFinish: _onFinish,
+      onCancel: _onCancel,
+      onSuccess: _onSuccess,
+      onError: _onError,
+    })
+    
+    const { method, data, replace, only, headers, errorBag, forceFormData, onCancelToken, onBefore, onStart, onProgress, onFinish, onCancel, onSuccess, onError, url } = preparedOptions
+    let { preserveScroll, preserveState } = preparedOptions
 
     const visit: PendingVisit = {
       url,
@@ -413,32 +452,32 @@ export class Router {
     }
   }
 
-  public get(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitOptions, 'method'|'data'> = {}): void {
+  public get(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitParams, 'method'|'data'> = {}): void {
     return this.visit(url, { ...options, method: Method.GET, data })
   }
 
-  public reload(options: Exclude<VisitOptions, 'preserveScroll'|'preserveState'> = {}): void {
+  public reload(options: Exclude<VisitParams, 'preserveScroll'|'preserveState'> = {}): void {
     return this.visit(window.location.href, { ...options, preserveScroll: true, preserveState: true })
   }
 
-  public replace(url: URL|string, options: Exclude<VisitOptions, 'replace'> = {}): void {
+  public replace(url: URL|string, options: Exclude<VisitParams, 'replace'> = {}): void {
     console.warn(`Inertia.replace() has been deprecated and will be removed in a future release. Please use Inertia.${options.method ?? 'get'}() instead.`)
     return this.visit(url, { preserveState: true, ...options, replace: true })
   }
 
-  public post(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitOptions, 'method'|'data'> = {}): void {
+  public post(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitParams, 'method'|'data'> = {}): void {
     return this.visit(url, { preserveState: true, ...options, method: Method.POST, data })
   }
 
-  public put(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitOptions, 'method'|'data'> = {}): void {
+  public put(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitParams, 'method'|'data'> = {}): void {
     return this.visit(url, { preserveState: true, ...options, method: Method.PUT, data })
   }
 
-  public patch(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitOptions, 'method'|'data'> = {}): void {
+  public patch(url: URL|string, data: RequestPayload = {}, options: Exclude<VisitParams, 'method'|'data'> = {}): void {
     return this.visit(url, { preserveState: true, ...options, method: Method.PATCH, data })
   }
 
-  public delete(url: URL|string, options: Exclude<VisitOptions, 'method'> = {}): void {
+  public delete(url: URL|string, options: Exclude<VisitParams, 'method'> = {}): void {
     return this.visit(url, { preserveState: true, ...options, method: Method.DELETE })
   }
 
