@@ -196,8 +196,8 @@ export class Router {
       return value
     }
   }
-  
-  protected prepareVisit(href: string|URL, params: VisitParams): Required<VisitParams> & { url: URL } {
+
+  public visit(href: string|URL, params: VisitParams = {}): void {
     const options: Required<VisitParams> = {
       method: Method.GET,
       data: {},
@@ -219,34 +219,22 @@ export class Router {
       ... params,
     }
 
-    const url = typeof href === 'string' ? hrefToUrl(href) : href
+    let url = typeof href === 'string' ? hrefToUrl(href) : href
+
     const prepared = this.visitOptions({ url, options: options }) || options
 
-    if ((hasFiles(prepared.data) || prepared.forceFormData) && !(prepared.data instanceof FormData)) {
-      prepared.data = objectToFormData(prepared.data)
+    const { method, replace, only, headers, errorBag, forceFormData, onCancelToken, onBefore, onStart, onProgress, onFinish, onCancel, onSuccess, onError } = prepared
+    let { data, preserveScroll, preserveState } = prepared
+
+    if ((hasFiles(data) || forceFormData) && !(data instanceof FormData)) {
+      data = objectToFormData(data)
     }
 
-    if (!(prepared.data instanceof FormData)) {
-      const [_href, _data] = mergeDataIntoQueryString(prepared.method, url, prepared.data)
-
-      return {
-        ... prepared,
-        data: _data,
-        url: hrefToUrl(_href),
-      }
+    if (!(data instanceof FormData)) {
+      const [_href, _data] = mergeDataIntoQueryString(method, url, data)
+      url = hrefToUrl(_href)
+      data = _data
     }
-
-    return {
-      ... prepared,
-      url,
-    }
-  }
-
-  public visit(href: string|URL, params: VisitParams): void {
-    const preparedOptions = this.prepareVisit(href, params)
-    
-    const { method, data, replace, only, headers, errorBag, forceFormData, onCancelToken, onBefore, onStart, onProgress, onFinish, onCancel, onSuccess, onError, url } = preparedOptions
-    let { preserveScroll, preserveState } = preparedOptions
 
     const visit: PendingVisit = {
       url,
