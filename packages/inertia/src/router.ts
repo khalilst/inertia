@@ -197,9 +197,30 @@ export class Router {
     }
   }
   
-  protected prepareVisit(href: string|URL, options: Required<VisitParams>): Required<VisitParams> & { url: URL } {
+  protected prepareVisit(href: string|URL, params: VisitParams): Required<VisitParams> & { url: URL } {
+    const options: Required<VisitParams> = {
+      method: Method.GET,
+      data: {},
+      replace: false,
+      preserveScroll: false,
+      preserveState: false,
+      only: [],
+      headers: {},
+      errorBag: '',
+      forceFormData: false,
+      onCancelToken: () => {},
+      onBefore: () => {},
+      onStart: () => {},
+      onProgress: () => {},
+      onFinish: () => {},
+      onCancel: () => {},
+      onSuccess: () => {},
+      onError: () => {},
+      ... params,
+    }
+
     const url = typeof href === 'string' ? hrefToUrl(href) : href
-    const prepared = this.visitOptions({ url, options }) || options
+    const prepared = this.visitOptions({ url, options: options }) || options
 
     if ((hasFiles(prepared.data) || prepared.forceFormData) && !(prepared.data instanceof FormData)) {
       prepared.data = objectToFormData(prepared.data)
@@ -221,44 +242,8 @@ export class Router {
     }
   }
 
-  public visit(href: string|URL, {
-    method: _method = Method.GET,
-    data: _data = {},
-    replace: _replace = false,
-    preserveScroll: _preserveScroll = false,
-    preserveState: _preserveState = false,
-    only: _only = [],
-    headers: _headers = {},
-    errorBag: _errorBag = '',
-    forceFormData: _forceFormData = false,
-    onCancelToken: _onCancelToken = () => {},
-    onBefore: _onBefore = () => {},
-    onStart: _onStart = () => {},
-    onProgress: _onProgress = () => {},
-    onFinish: _onFinish = () => {},
-    onCancel: _onCancel = () => {},
-    onSuccess: _onSuccess = () => {},
-    onError: _onError = () => {},
-  }: VisitParams = {}): void {
-    const preparedOptions = this.prepareVisit(href, {
-      method: _method,
-      data: _data,
-      replace: _replace,
-      preserveScroll: _preserveScroll,
-      preserveState: _preserveState,
-      only: _only,
-      headers: _headers,
-      errorBag: _errorBag,
-      forceFormData: _forceFormData,
-      onCancelToken: _onCancelToken,
-      onBefore: _onBefore,
-      onStart: _onStart,
-      onProgress: _onProgress,
-      onFinish: _onFinish,
-      onCancel: _onCancel,
-      onSuccess: _onSuccess,
-      onError: _onError,
-    })
+  public visit(href: string|URL, params: VisitParams): void {
+    const preparedOptions = this.prepareVisit(href, params)
     
     const { method, data, replace, only, headers, errorBag, forceFormData, onCancelToken, onBefore, onStart, onProgress, onFinish, onCancel, onSuccess, onError, url } = preparedOptions
     let { preserveScroll, preserveState } = preparedOptions
